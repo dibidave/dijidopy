@@ -252,6 +252,8 @@ def get_goal_times_by_date_range(start_date, end_date, split_overlapping=True):
     # Get the date 
     start_time = get_datetime_from_date(start_date)
     end_time = get_datetime_from_date(end_date, inclusive=True)
+
+    debug(f"Getting goal times between {start_time} and {end_time}")
     
     # Now we need to figure how many days in the past we need to go to make sure we capture all logs
     now = get_time_now_aware()
@@ -276,6 +278,8 @@ def get_goal_times_by_date_range(start_date, end_date, split_overlapping=True):
             log_time_dict[log_time] = []
 
         log_time_dict[log_time].append(entry)
+
+    debug(log_time_dict)
     
     # Make sure all intervals are complete(one start, one stop within the time ranges)
     cap_and_clean_intervals(log_time_dict, start_time, end_time)
@@ -312,6 +316,7 @@ def get_goal_times_by_date_range(start_date, end_date, split_overlapping=True):
 
             # Weighted by number of goals
             active_goal_durations[goal_id] += interval_duration
+            add_goal_durations_recursive(goal_sums, goal_id, interval_duration)
 
         # Loop through the log entries that happen at this time
         for log_entry in log_time_dict[current_time]:
@@ -323,7 +328,6 @@ def get_goal_times_by_date_range(start_date, end_date, split_overlapping=True):
                 active_goal_durations[goal_id] = 0
             
             elif log_entry["type"] == "Stopped":
-                add_goal_durations_recursive(goal_sums, goal_id, interval_duration)
                 del active_goal_durations[goal_id]
 
         debug(f"Between {previous_time} and {current_time}, we had {num_active_goals} active goals.")
@@ -331,6 +335,8 @@ def get_goal_times_by_date_range(start_date, end_date, split_overlapping=True):
         if num_active_goals == 0:
             
             goal_sums["Untracked"] += interval_duration
+            
+            debug(f"Adding {interval_duration}s to Untracked")
 
         previous_time = current_time
             
