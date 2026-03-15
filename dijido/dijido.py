@@ -107,6 +107,32 @@ def convert_to_datetime(date_string):
     return time
 
 
+def get_goals():
+    
+    response = __SESSION__.get(
+        endpoint(
+            "goals"
+        )
+    )
+    
+    goals = response.json()["goals"]
+    
+    return goals
+
+
+def get_activities():
+    
+    response = __SESSION__.get(
+        endpoint(
+            "activities"
+        )
+    )
+    
+    activities = response.json()["activities"]
+    
+    return activities
+
+
 def get_goals_by_name(name):
     
     global GOALS_BY_NAME
@@ -135,6 +161,27 @@ def get_goals_by_name(name):
     return goals
 
 
+def get_goals_by_parent_id(parent_id):
+    
+    global GOALS_BY_NAME
+    
+    response = __SESSION__.get(
+        endpoint(
+            "goals",
+            {
+                "parent_goal_ids": parent_id
+            }
+        )
+    )
+    
+    goals = response.json()["goals"]
+    
+    if len(goals) == 0:
+        return None
+    
+    return goals
+
+
 def get_goal_by_id(goal_id):
     
     global GOALS_BY_ID
@@ -156,6 +203,7 @@ def get_goal_by_id(goal_id):
     if len(goals) > 1:
         warnings.warn(f"More than one goal with id {goal_id} found")
     elif len(goals) == 0:
+        warnings.warn(f"No goal with id {goal_id} found")
         return None
     
     goal = goals[0]
@@ -227,7 +275,6 @@ def cap_and_clean_intervals(log_time_dict, start_time, end_time):
                 if goal_id in active_goal_ids:
                     del active_goal_ids[goal_id]
                     continue
-                    
                 virtual_log_entry = log_entry.copy()
                 virtual_log_entry["type"] = "Started"
                 
@@ -355,3 +402,42 @@ def get_goal_times_by_date_range(start_date, end_date, split_overlapping=True):
         goals[goal_id]["duration"] = seconds
         
     return goals
+
+
+def get_activities_for_goal(goal_id, recursive=True):
+        
+    goal = get_goal_by_id(goal_id)
+
+    print(f"Getting activities for {goal['name']}, id {goal_id}")
+    
+    if not goal:
+        return []
+    
+    response = __SESSION__.get(
+        endpoint(
+            "activities",
+            {
+                "goal_id": goal_id
+            }
+        )
+    )
+    
+    activities = response.json()["activities"]
+
+    response = __SESSION__.get(
+        endpoint(
+            "goals",
+            {
+                "parent_goal_ids": goal_id
+            }
+        )
+    )
+
+    child_goals = response.json()["goals"]
+
+    for child_goal in child_goals:
+        activities += get_activities_for_goal(
+            child_goal["_id"], recursive=recursive
+        )
+    
+    return activities

@@ -2,7 +2,7 @@ import requests
 import pandas
 import datetime
 
-NOTION_INTEGRATION_TOKEN = None"
+NOTION_INTEGRATION_TOKEN = None
 WEIGHT_DATABASE_ID = "23aeb254c006488abc929c9aae706793"
 INTAKE_DATABASE_ID = "fb30e296448d4f7f9ff7ec006e54bab3"
 NOTION_API_ENDPOINT = "https://api.notion.com/v1/databases/{database_id}/query"
