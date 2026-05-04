@@ -424,6 +424,9 @@ def get_activities_for_goal(goal_id, recursive=True):
     
     activities = response.json()["activities"]
 
+    if not recursive:
+        return activities
+
     response = __SESSION__.get(
         endpoint(
             "goals",
@@ -439,5 +442,5 @@ def get_activities_for_goal(goal_id, recursive=True):
         activities += get_activities_for_goal(
             child_goal["_id"], recursive=recursive
         )
-    
+
     return activities

@@ -36,7 +36,7 @@ def login(session: requests.Session) -> bool:
 def fetch_weight_logs(session: requests.Session, page: int = 1, limit: int = 100) -> dict:
     """Fetch weight logs with pagination."""
     resp = session.get(
-        f"{BASE_URL}/api/weight",
+        f"{BASE_URL}/api/measurements",
         params={"page": page, "limit": limit},
         verify=VERIFY_SSL,
     )
@@ -62,10 +62,12 @@ def get_weight_log(timedelta=None):
             break
         page += 1
 
+    data = [x for x in data if x["measurement_type_name"] == "Weight"]
+
     df = pandas.DataFrame.from_records(data)
 
     # Rename weight_lbs to weight
-    df.rename(columns={"weight_lbs": "weight"}, inplace=True)
+    df.rename(columns={"value": "weight"}, inplace=True)
     # Convert measured_at to datetime
     df["measured_at"] = pandas.to_datetime(df["measured_at"])
     # Convert logged_at to datetime

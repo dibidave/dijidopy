@@ -12,10 +12,10 @@ Loads ``.env`` from the parent of this repo (``../.env`` when the repo is ``diji
 
 Examples::
 
-  python3 caffeine_latest_march.py --start 2026-03-01 --end 2026-03-31
-  python3 caffeine_latest_march.py --march-year 2026
-  python3 caffeine_latest_march.py --summary-through 2026-03 --summary-months 6 --binomial-march
-  python3 caffeine_latest_march.py --compare-experiment-windows
+  python3 caffeine_latest_april.py --start 2026-04-01 --end 2026-04-30
+  python3 caffeine_latest_april.py --april-year 2026
+  python3 caffeine_latest_april.py --summary-through 2026-04 --summary-months 6 --binomial-april
+  python3 caffeine_latest_april.py --compare-experiment-windows
 """
 
 from __future__ import annotations
@@ -310,16 +310,16 @@ def two_proportion_fisher_or_z(
     return out
 
 
-def compare_12mo_before_dec2025_vs_jan_mar_2026(
+def compare_12mo_before_dec2025_vs_jan_apr_2026(
     df: pd.DataFrame,
     tz: str,
 ) -> Dict[str, object]:
     """
     Baseline: Dec 2024 through Nov 2025 (12 months before Dec 2025; Dec 2025 excluded as mixed).
-    Comparison: Jan–Mar 2026 pooled.
+    Comparison: Jan–Apr 2026 pooled.
     """
     baseline_months = iter_calendar_months_inclusive(2024, 12, 2025, 11)
-    follow_months = [(2026, 1), (2026, 2), (2026, 3)]
+    follow_months = [(2026, 1), (2026, 2), (2026, 3), (2026, 4)]
     baseline = pooled_evening_over_calendar_months(df, tz, baseline_months)
     follow = pooled_evening_over_calendar_months(df, tz, follow_months)
     test = two_proportion_fisher_or_z(
@@ -330,7 +330,7 @@ def compare_12mo_before_dec2025_vs_jan_mar_2026(
     )
     return {
         "label_baseline": "Dec 2024 – Nov 2025 (12 mo; excludes Dec 2025)",
-        "label_follow": "Jan – Mar 2026",
+        "label_follow": "Jan – Apr 2026",
         "baseline": baseline,
         "follow": follow,
         "test": test,
@@ -369,23 +369,23 @@ def summarize_months_backward(
     return [month_evening_summary(df, y, m, tz) for y, m in reversed(months)]
 
 
-def binomial_march_vs_prior_three(
+def binomial_april_vs_prior_three(
     summaries: List[Dict[str, object]],
-    march_year: int,
-    march_month: int = 3,
+    april_year: int,
+    april_month: int = 4,
 ) -> Optional[Dict[str, object]]:
     """
-    One-sided binomial test: H0: March evening-day probability equals pooled rate from
-    the three calendar months immediately before March (Feb, Jan, Dec of preceding year
-    when March is month 3).
+    One-sided binomial test: H0: April evening-day probability equals pooled rate from
+    the three calendar months immediately before April (Mar, Feb, Jan of the same year
+    when April is month 4).
     """
     by_ym = {(s["year"], s["month"]): s for s in summaries}
-    key_march = (march_year, march_month)
-    if key_march not in by_ym:
+    key_april = (april_year, april_month)
+    if key_april not in by_ym:
         return None
 
-    m_prev = march_month - 1
-    y_prev = march_year
+    m_prev = april_month - 1
+    y_prev = april_year
     if m_prev < 1:
         m_prev = 12
         y_prev -= 1
@@ -399,9 +399,9 @@ def binomial_march_vs_prior_three(
         else:
             m -= 1
 
-    sm = by_ym[key_march]
-    x_m = int(sm["days_with_evening_caffeine"])
-    n_m = int(sm["days_in_month"])
+    sm = by_ym[key_april]
+    x_a = int(sm["days_with_evening_caffeine"])
+    n_a = int(sm["days_in_month"])
 
     x_p = 0
     n_p = 0
@@ -412,15 +412,15 @@ def binomial_march_vs_prior_three(
         x_p += int(s["days_with_evening_caffeine"])
         n_p += int(s["days_in_month"])
 
-    if n_p == 0 or n_m == 0:
+    if n_p == 0 or n_a == 0:
         return None
 
     p0 = x_p / n_p
     result: Dict[str, object] = {
-        "march": key_march,
-        "march_evening_days": x_m,
-        "march_days": n_m,
-        "march_rate": x_m / n_m,
+        "april": key_april,
+        "april_evening_days": x_a,
+        "april_days": n_a,
+        "april_rate": x_a / n_a,
         "prior_months": list(reversed(keys_prior)),
         "prior_evening_days": x_p,
         "prior_days": n_p,
@@ -428,18 +428,18 @@ def binomial_march_vs_prior_three(
     }
 
     if binomtest is not None:
-        bt = binomtest(x_m, n_m, p=p0, alternative="less")
+        bt = binomtest(x_a, n_a, p=p0, alternative="less")
         result["p_value"] = float(bt.pvalue)
         result["method"] = "scipy.stats.binomtest(..., alternative='less')"
     else:
         result["method"] = "normal approximation Φ(z), z=(p̂−p0)/SE (install scipy for binomtest)"
         if p0 <= 0:
-            result["p_value"] = 0.0 if x_m == 0 else 1.0
+            result["p_value"] = 0.0 if x_a == 0 else 1.0
         elif p0 >= 1:
-            result["p_value"] = 1.0 if x_m == n_m else 0.0
+            result["p_value"] = 1.0 if x_a == n_a else 0.0
         else:
-            se = math.sqrt(p0 * (1 - p0) / n_m)
-            z = ((x_m / n_m) - p0) / se if se > 0 else 0.0
+            se = math.sqrt(p0 * (1 - p0) / n_a)
+            z = ((x_a / n_a) - p0) / se if se > 0 else 0.0
             result["p_value"] = float(0.5 * (1.0 + math.erf(z / math.sqrt(2.0))))
 
     return result
@@ -458,10 +458,10 @@ def main() -> int:
         help="Inclusive logical end date (YYYY-MM-DD)",
     )
     parser.add_argument(
-        "--march-year",
+        "--april-year",
         type=int,
         metavar="YEAR",
-        help="Shorthand: March 1–31 of this year",
+        help="Shorthand: April 1–30 of this year",
     )
     parser.add_argument("--year", type=int, help=argparse.SUPPRESS)
     parser.add_argument(
@@ -484,24 +484,24 @@ def main() -> int:
         help="Print evening-caffeine day counts for N calendar months ending at --summary-through",
     )
     parser.add_argument(
-        "--binomial-march",
+        "--binomial-april",
         action="store_true",
-        help="With monthly summary including March, test if March rate < pooled prior 3 months",
+        help="With monthly summary including April, test if April rate < pooled prior 3 months",
     )
     parser.add_argument(
-        "--binomial-march-year",
+        "--binomial-april-year",
         type=int,
         default=None,
-        help="Calendar year of March for --binomial-march (default: year from --summary-through)",
+        help="Calendar year of April for --binomial-april (default: year from --summary-through)",
     )
     parser.add_argument(
         "--compare-experiment-windows",
         action="store_true",
-        help="Compare evening caffeine: Dec 2024–Nov 2025 (12 mo before Dec 2025, Dec 2025 omitted) vs Jan–Mar 2026",
+        help="Compare evening caffeine: Dec 2024–Nov 2025 (12 mo before Dec 2025, Dec 2025 omitted) vs Jan–Apr 2026",
     )
     args = parser.parse_args()
-    if args.year is not None and args.march_year is None:
-        args.march_year = args.year
+    if args.year is not None and args.april_year is None:
+        args.april_year = args.year
 
     session = requests.Session()
     session.headers.update({"Content-Type": "application/json"})
@@ -520,15 +520,15 @@ def main() -> int:
         if end < start:
             print("--end must be on or after --start", file=sys.stderr)
             return 1
-    elif args.march_year is not None:
-        start = dt.date(args.march_year, 3, 1)
-        end = dt.date(args.march_year, 3, 31)
+    elif args.april_year is not None:
+        start = dt.date(args.april_year, 4, 1)
+        end = dt.date(args.april_year, 4, 30)
 
     want_summary = bool(args.summary_months and args.summary_through)
     want_compare = bool(args.compare_experiment_windows)
     if start is None and end is None and not want_summary and not want_compare:
         parser.error(
-            "Provide --start/--end, or --march-year, or --summary-through with --summary-months, "
+            "Provide --start/--end, or --april-year, or --summary-through with --summary-months, "
             "or --compare-experiment-windows"
         )
 
@@ -567,28 +567,28 @@ def main() -> int:
                 f"(rate {s['rate']:.4f})"
             )
 
-        if args.binomial_march:
-            march_year = args.binomial_march_year if args.binomial_march_year is not None else ey
-            if em != 3:
+        if args.binomial_april:
+            april_year = args.binomial_april_year if args.binomial_april_year is not None else ey
+            if em != 4:
                 print(
-                    f"\nNote: --binomial-march uses March ({march_year}-03); "
+                    f"\nNote: --binomial-april uses April ({april_year}-04); "
                     f"summary-through month is {ey}-{em:02d}.",
                     file=sys.stderr,
                 )
-            bt = binomial_march_vs_prior_three(rows, march_year, 3)
+            bt = binomial_april_vs_prior_three(rows, april_year, 4)
             if bt is None:
-                print("\nCould not run binomial test (need March and three prior months in summary).", file=sys.stderr)
+                print("\nCould not run binomial test (need April and three prior months in summary).", file=sys.stderr)
             else:
                 print(
-                    f"\nBinomial test (March {march_year} vs pooled Dec–Jan–Feb immediately before):\n"
-                    f"  March: {bt['march_evening_days']}/{bt['march_days']} = {bt['march_rate']:.4f}\n"
+                    f"\nBinomial test (April {april_year} vs pooled Jan–Feb–Mar immediately before):\n"
+                    f"  April: {bt['april_evening_days']}/{bt['april_days']} = {bt['april_rate']:.4f}\n"
                     f"  Prior 3 months: {bt['prior_evening_days']}/{bt['prior_days']} = {bt['prior_rate']:.4f}\n"
-                    f"  H0: March probability = prior rate; H1: March probability is lower (one-sided)\n"
+                    f"  H0: April probability = prior rate; H1: April probability is lower (one-sided)\n"
                     f"  p-value ≈ {bt['p_value']:.4g} ({bt['method']})"
                 )
 
     if args.compare_experiment_windows:
-        cmp = compare_12mo_before_dec2025_vs_jan_mar_2026(df, args.tz)
+        cmp = compare_12mo_before_dec2025_vs_jan_apr_2026(df, args.tz)
         b, f = cmp["baseline"], cmp["follow"]
         t = cmp["test"]
         print(f"\n{cmp['label_baseline']} vs {cmp['label_follow']} ({args.tz}, evening window as above)\n")
@@ -599,7 +599,7 @@ def main() -> int:
                 f"(rate {s['rate']:.4f})"
             )
         print(f"  Pooled: {b['evening_days']}/{b['total_days']} = {b['rate']:.4f}\n")
-        print("Jan–Mar 2026:")
+        print("Jan–Apr 2026:")
         for s in f["per_month"]:
             print(
                 f"  {s['year']}-{s['month']:02d}: {s['days_with_evening_caffeine']}/{s['days_in_month']} "
