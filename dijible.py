@@ -71,15 +71,15 @@ def get_weight_log(timedelta=None):
     # Convert measured_at to datetime
     df["measured_at"] = pandas.to_datetime(df["measured_at"])
     # Convert logged_at to datetime
-    df["logged_at"] = pandas.to_datetime(df["logged_at"])
+    df["measured_at"] = pandas.to_datetime(df["measured_at"])
 
     # Add a new column date which takes measured_at if it exists, otherwise logged_at
-    df["date"] = df["measured_at"].fillna(df["logged_at"])
+    df["date"] = df["measured_at"].fillna(df["measured_at"])
     # Convert date to datetime
     df["date"] = pandas.to_datetime(df["date"])
 
     # Drop the measured_at and logged_at columns
-    df.drop(columns=["measured_at", "logged_at", "id"], inplace=True)
+    df.drop(columns=["measured_at", "measured_at", "id"], inplace=True)
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
@@ -141,7 +141,7 @@ def get_nutrient_log(nutrient_name: str, timedelta=None):
         pagination = result["pagination"]
 
         for r in rows:
-            consumed_at = r.get("consumed_at") or r.get("logged_at")
+            consumed_at = r.get("consumed_at")
             nv = r.get("nutrient_values", {})
             value = nv.get(nutrient_id) or nv.get(str(nutrient_id))
             all_rows.append({
@@ -162,6 +162,63 @@ def get_nutrient_log(nutrient_name: str, timedelta=None):
         df = df[df["consumed_at"] > now - timedelta]
 
     print(f"\nFetched {len(df)} intakes with {nutrient_name} values")
+    return df
+
+
+def get_nutrient_and_calorie_log(nutrient_name: str, timedelta=None):
+    """Fetch intake logs for the given nutrient along with the calories of each intake.
+
+    Returns a DataFrame with consumed_at, a column named after the nutrient
+    (lowercase, null where the intake didn't have that nutrient measured), and a
+    calories column. The nutrient and calories are fetched together in a single
+    paginated call so each intake row carries both values.
+    """
+    session = requests.Session()
+    session.headers.update({"Content-Type": "application/json"})
+
+    if not login(session):
+        raise RuntimeError("Login failed")
+
+    nutrient_id = get_nutrient_id(session, nutrient_name)
+    if nutrient_id is None:
+        raise RuntimeError(f"Nutrient '{nutrient_name}' not found in database")
+
+    calories_id = get_nutrient_id(session, "calories")
+    if calories_id is None:
+        raise RuntimeError("Nutrient 'calories' not found in database")
+
+    column_name = nutrient_name.lower()
+    all_rows = []
+    page = 1
+    while True:
+        result = fetch_intakes(session, f"{nutrient_id},{calories_id}", page=page)
+        rows = result["data"]
+        pagination = result["pagination"]
+
+        for r in rows:
+            consumed_at = r.get("consumed_at")
+            nv = r.get("nutrient_values", {})
+            nutrient_value = nv.get(nutrient_id) or nv.get(str(nutrient_id))
+            calorie_value = nv.get(calories_id) or nv.get(str(calories_id))
+            all_rows.append({
+                "consumed_at": consumed_at,
+                column_name: float(nutrient_value) if nutrient_value is not None else None,
+                "calories": float(calorie_value) if calorie_value is not None else None,
+            })
+
+        if not pagination.get("hasMore"):
+            break
+        page += 1
+
+    df = pandas.DataFrame(all_rows)
+    df["consumed_at"] = [datetime.datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f%z") for date in df["consumed_at"]]
+    df = df.sort_values("consumed_at").reset_index(drop=True)
+
+    if timedelta:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        df = df[df["consumed_at"] > now - timedelta]
+
+    print(f"\nFetched {len(df)} intakes with {nutrient_name} and calorie values")
     return df
 
 
